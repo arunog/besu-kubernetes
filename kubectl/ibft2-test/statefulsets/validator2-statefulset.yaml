@@ -89,22 +89,15 @@ spec:
                 configMapKeyRef:
                   name: besu-configmap
                   key: validator1PubKey
-            - name: NODES_HTTP_CORS_ORIGINS
-              valueFrom:
-                configMapKeyRef:
-                  name: besu-configmap
-                  key: nodesHttpCorsOrigins
-            - name: NODES_HOST_WHITELIST
-              valueFrom:
-                configMapKeyRef:
-                  name: besu-configmap
-                  key: nodesHostWhitelist
           volumeMounts:
             - name: key
               mountPath: /secrets
               readOnly: true
             - name: genesis-config
               mountPath: /configs
+              readOnly: true
+            - name: config-toml
+              mountPath: /etc/besu
               readOnly: true
           ports:
             - containerPort: 8545
@@ -128,24 +121,7 @@ spec:
           args:
             - |
               exec /opt/besu/bin/besu \
-              --genesis-file=/configs/genesis.json \
-              --node-private-key-file=/secrets/key \
-              --rpc-http-enabled \
-              --rpc-http-host=0.0.0.0 \
-              --rpc-http-port=8545 \
-              --rpc-http-cors-origins=${NODES_HTTP_CORS_ORIGINS} \
-              --rpc-http-api=ETH,NET,IBFT \
-              --graphql-http-enabled \
-              --graphql-http-host=0.0.0.0 \
-              --graphql-http-port=8547 \
-              --graphql-http-cors-origins=${NODES_HTTP_CORS_ORIGINS} \
-              --rpc-ws-enabled \
-              --rpc-ws-host=0.0.0.0 \
-              --rpc-ws-port=8546 \
-              --metrics-enabled=true \
-              --metrics-host=0.0.0.0 \
-              --metrics-port=9545 \
-              --host-whitelist=${NODES_HOST_WHITELIST} \
+              --config-file=/etc/besu/config.toml \
               --bootnodes=enode://${VALIDATOR1_PUBKEY}@${BESU_VALIDATOR1_SERVICE_HOST}:30303
           livenessProbe:
             httpGet:
@@ -163,3 +139,6 @@ spec:
             items:
               - key: genesis.json
                 path: genesis.json
+        - name: config-toml
+          configMap:
+            name: besu-toml-configmap
