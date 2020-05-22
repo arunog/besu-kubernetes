@@ -6,7 +6,7 @@ metadata:
     app: besu-toml-configmap
   namespace: besu
 data:
-  config-toml: |-
+  config.toml: |-
     # Every possible CLI should be in this file.
     #
     # Please use a plausible value, besu has to at least be able to parse it.
