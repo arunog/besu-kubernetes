@@ -1,0 +1,96 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: node
+  labels:
+    app: node
+  namespace: besu
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: node
+  serviceName: besu-node
+  template:
+    metadata:
+      labels:
+        app: node
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9545"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: node
+          image: hyperledger/besu:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1024Mi
+            limits:
+              cpu: 500m
+              memory: 2048Mi
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VALIDATOR1_PUBKEY
+              valueFrom:
+                configMapKeyRef:
+                  name: besu-configmap
+                  key: validator1PubKey
+            - name: VALIDATOR1_IP
+              valueFrom:
+                configMapKeyRef:
+                  name: besu-configmap
+                  key: validator1Ip
+          volumeMounts:
+            - name: genesis-config
+              mountPath: /configs
+              readOnly: true
+            - name: config-toml
+              mountPath: /etc/besu
+              readOnly: true
+          ports:
+            - containerPort: 8545
+              name: json-rpc
+              protocol: TCP
+            - containerPort: 8546
+              name: ws
+              protocol: TCP
+            - containerPort: 8547
+              name: graphql
+              protocol: TCP
+            - containerPort: 30303
+              name: rlpx
+              protocol: TCP
+            - containerPort: 30303
+              name: discovery
+              protocol: UDP
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              exec /opt/besu/bin/besu \
+              --config-file=/etc/besu/config.toml \
+              --bootnodes=enode://${VALIDATOR1_PUBKEY}@${VALIDATOR1_IP}:30303
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 8545
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: genesis-config
+          configMap:
+            name: besu-configmap
+            items:
+              - key: genesis.json
+                path: genesis.json
+        - name: config-toml
+          configMap:
+            name: besu-toml-configmap
