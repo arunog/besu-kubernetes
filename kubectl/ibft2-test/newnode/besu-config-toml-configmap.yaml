@@ -25,7 +25,7 @@ data:
     # permissions-nodes-config-file="./permissions_config.toml"
     # TODO : insert as command line & mount Volume
     # permissions-accounts-config-file="./permissions_config.toml"
-    logging="TRACE"
+    logging="INFO"
 
     # Transaction Pool
     tx-pool-retention-hours=999
