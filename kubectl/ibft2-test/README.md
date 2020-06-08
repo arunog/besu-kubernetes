@@ -1,88 +1,64 @@
 
 ## Flow of the process:
-- Create private/public keys for the validators & update the secrets/validator-keys-secret.yaml with the validator private keys
-- Update the configmap/configmap.yml with the public keys & genesis file
-- Update the number of nodes you would like in deployments/node-deployment.yaml
-- Run kubectl
-- Monitoring via prometheus & grafana is also setup up in a separate *monitoring* namespace and exposed via NodePort services (ports 30090, 30030 respectively)
-- Credentials for grafana are admin:password. When grafana loads up select the "besu Dashboard"
-
-## Overview of Setup
-![Image ibft](../../images/ibft.png)
-
-## NOTE:
-1. validators1 and 2 serve as bootnodes as well. Adjust according to your needs
-2. If you add more validators in past the initial setup, they need to be voted in to be validators i.e they will serve as normal nodes and not validators until they've been voted in.
-
-#### 1. Boot nodes private keys
-Create private/public keys for the validators using the besu subcommands. The private keys are put into secrets and the public keys go into a configmap to get the bootnode enode address easily
-Repeat this process for as many validators as you would like to provision i.e keys and replicate the deployment & service
-
 ```bash
-docker run --rm --volume $PWD/ibftSetup/:/opt/besu/data hyperledger/besu:latest operator generate-blockchain-config --config-file=/opt/besu/data/ibftConfigFile.json --to=/opt/besu/data/networkFiles --private-key-file-name=key
-sudo chown -R $USER:$USER ./ibftSetup
-mv ./ibftSetup/networkFiles/genesis.json ./ibftSetup/
-```
-
-Update the secrets/validator-key-secret.yaml with the private keys. The private keys are put into secrets and the public keys go into a configmap that other nodes use to create the enode address
-Update the configmap/configmap.yaml with the public keys
-**Note:** Please remove the '0x' prefix of the public keys
-
-#### 2. Genesis.json
-Copy the genesis.json file and copy its contents into the configmap/configmap as shown
-
-#### 3. Update any more config if required
-eg: To alter the number of nodes on the network, alter the `replicas: 2` in the deployments/node-deployments.yaml to suit
-
-#### 4. Deploy:
-```bash
-
+cd ~/besu-kubernetes/kubectl/ibft2-test/
 ./deploy.sh
 
-```
+kubectl get services -A
 
+kubectl logs -n besu validator1-0 | grep enode | less
 
-#### 5. In the dashboard, you will see each bootnode deployment & service, nodes & a node service, miner if enabled, secrets(opaque) and a configmap
+enode://4826f9c05788be18bb65ea801560d303cdd502fa5ac8dcda92b34840cc4669b4976506a43c5fbf7e49f47bbb780f896dbd0027f76b0511bb1c76dbdeec29afeb@xx.xx.xx.xx:30303
 
-If using minikube
-```bash
-minikube dashboard &
-```
+nano ~/besu-kubernetes/kubectl/ibft2-test/newnode/besu-configmap.yaml
+check validator1PubKey && validator1Ip UDP
 
-#### 6. Verify that the nodes are communicating:
-```bash
-minikube ssh
+kubectx test-aks-2
 
-# once in the terminal
-curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' <besu_NODE_SERVICE_HOST>:8545
+cd ~/besu-kubernetes/kubectl/ibft2-test/
+./addNode.sh
 
-# which should return:
-The result confirms that the node running the JSON-RPC service has two peers:
-{
-  "jsonrpc" : "2.0",
-  "id" : 1,
-  "result" : "0x5"
-}
+kubectl logs -n besu node-0 | grep enode | less
 
-```
+enode://58a6b4578e07042e66bce0187bc3f58b484f62323d6eab5ffa7f50ab833b5de76a5269b5896d6f3b8b953a073f6fced1dc6b72388adf82c3dc4d27294b092ff7@xx.xx.xx.xx:30303
 
+## Check net_peerCount
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
 
-#### 7. Monitoring
-Get the ip that minikube is running on
-```bash
-minikube ip
-```
+## Force add peer Bootnode Cluster A to Observer Cluster B
+curl -X POST --data '{"jsonrpc":"2.0","method":"admin_addPeer","params":["enode://4826f9c05788be18bb65ea801560d303cdd502fa5ac8dcda92b34840cc4669b4976506a43c5fbf7e49f47bbb780f896dbd0027f76b0511bb1c76dbdeec29afeb@xx.xx.xx.xx:30303"],"id":1}' http://xx.xx.xx.xx:8545
+## Force add peer Observer Cluster B to Bootnode Cluster A
+curl -X POST --data '{"jsonrpc":"2.0","method":"admin_addPeer","params":["enode://58a6b4578e07042e66bce0187bc3f58b484f62323d6eab5ffa7f50ab833b5de76a5269b5896d6f3b8b953a073f6fced1dc6b72388adf82c3dc4d27294b092ff7@xx.xx.xx.xx:30303"],"id":1}' http://xx.xx.xx.xx:8545
 
-For example if the ip returned was `192.168.99.100`
+## Check net_peerCount
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
 
-*Prometheus:*
-In a fresh browser tab open `192.168.99.100:30090` to get to the prometheus dashboard and you can see all the available metrics, as well as the targets that it is collecting metrics for
+## Create Besu Observer in Docker configuring Bootnode Cluster A as bootnode
 
-*Grafana:*
-In a fresh browser tab open `192.168.99.100:30030` to get to the grafana dashboard. Credentials are `admin:password` Open the 'besu Dashboard' to see the status of the nodes on your network. If you do not see the dashboard, click on Dashboards -> Manage and select the dashboard from there
+docker run --name node-1 -d -p 8545:8545 -p 8546:8546 -p 9545:9545 -p 30303:30303 --mount type=bind,source=/home/sabraroot/test-k8s/,target=/opt/pantheon/node hyperledger/besu:latest --data-path=/opt/pantheon/node/data --genesis-file=/opt/pantheon/node/genesis.json --rpc-http-enabled --rpc-http-host=0.0.0.0 --host-whitelist="*" --rpc-http-cors-origins="all" --rpc-http-api=ETH,NET,IBFT,ADMIN,WEB3,PERM,EEA,PRIV --bootnodes=enode://4826f9c05788be18bb65ea801560d303cdd502fa5ac8dcda92b34840cc4669b4976506a43c5fbf7e49f47bbb780f896dbd0027f76b0511bb1c76dbdeec29afeb@xx.xx.xx.xx:30303 --p2p-host=0.0.0.0 --revert-reason-enabled=true --rpc-ws-enabled --rpc-ws-host=0.0.0.0 --rpc-ws-port=8546 --metrics-enabled --metrics-host=0.0.0.0 --metrics-port=9545 --logging=TRACE
 
+docker logs node-1 | grep enode
 
-#### 8. Delete
-```
-./remove.sh
+enode://f5cbaca1105eaf72b9c82fa044cbd620607e2f891c9b4fd933299fc757fea2481da0dee3bc240e79b6c94edd6cce540f27f4d18102e723e7421967af5b2e4af2@xx.xx.xx.xx:30303
+
+## Check net_peerCount
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+
+## Force add peer Bootnode Cluster A to Docker observer
+curl -X POST --data '{"jsonrpc":"2.0","method":"admin_addPeer","params":["enode://4826f9c05788be18bb65ea801560d303cdd502fa5ac8dcda92b34840cc4669b4976506a43c5fbf7e49f47bbb780f896dbd0027f76b0511bb1c76dbdeec29afeb@xx.xx.xx.xx:30303"],"id":1}' http://xx.xx.xx.xx:8545
+## Force add peer Docker Observer to Bootnode Cluster A to 
+curl -X POST --data '{"jsonrpc":"2.0","method":"admin_addPeer","params":["enode://f5cbaca1105eaf72b9c82fa044cbd620607e2f891c9b4fd933299fc757fea2481da0dee3bc240e79b6c94edd6cce540f27f4d18102e723e7421967af5b2e4af2@xx.xx.xx.xx:30303"],"id":1}' http://xx.xx.xx.xx:8545
+
+## Check net_peerCount
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+curl -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":51}' http://xx.xx.xx.xx:8545
+
+## Force add peer Observer Cluster B to Docker Observer
+curl -X POST --data '{"jsonrpc":"2.0","method":"admin_addPeer","params":["enode://58a6b4578e07042e66bce0187bc3f58b484f62323d6eab5ffa7f50ab833b5de76a5269b5896d6f3b8b953a073f6fced1dc6b72388adf82c3dc4d27294b092ff7@xx.xx.xx.xx:30303"],"id":1}' http://xx.xx.xx.xx:8545
+curl -X POST --data '{"jsonrpc":"2.0","method":"admin_addPeer","params":["enode://f5cbaca1105eaf72b9c82fa044cbd620607e2f891c9b4fd933299fc757fea2481da0dee3bc240e79b6c94edd6cce540f27f4d18102e723e7421967af5b2e4af2@xx.xx.xx.xx:30303"],"id":1}' http://xx.xx.xx.xx:8545
 ```
