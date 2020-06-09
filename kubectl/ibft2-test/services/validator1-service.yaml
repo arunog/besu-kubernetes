@@ -4,8 +4,8 @@ metadata:
   labels:
     app.kubernetes.io/name: besu
     app.kubernetes.io/release: "1.0.0"
-  name: besu
-  namespace: besu-service
+  name: besu-service
+  namespace: besu
 spec:
   type: ClusterIP
   selector:

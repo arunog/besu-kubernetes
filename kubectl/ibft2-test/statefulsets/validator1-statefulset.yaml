@@ -55,7 +55,8 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: validator1
+      app.kubernetes.io/name: besu
+      app.kubernetes.io/release: 1.0.0
   serviceName: besu-validator1
   template:
     metadata:
