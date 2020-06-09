@@ -48,6 +48,7 @@ kind: StatefulSet
 metadata:
   name: validator1
   labels:
+    app: validator1
     app.kubernetes.io/name: besu
     app.kubernetes.io/release: 1.0.0
   namespace: besu
@@ -55,12 +56,14 @@ spec:
   replicas: 1
   selector:
     matchLabels:
+      app: validator1
       app.kubernetes.io/name: besu
       app.kubernetes.io/release: 1.0.0
   serviceName: besu-validator1
   template:
     metadata:
       labels:
+        app: validator1
         app.kubernetes.io/name: besu
         app.kubernetes.io/release: 1.0.0
       annotations:
@@ -94,11 +97,6 @@ spec:
                 configMapKeyRef:
                   name: besu-configmap
                   key: validator1PubKey
-            - name: KUBE_CONFIG_PATH
-              valueFrom:
-                configMapKeyRef:
-                  name: besu-configmap
-                  key: kubeConfig
           volumeMounts:
             - name: key
               mountPath: /secrets
@@ -133,7 +131,7 @@ spec:
               exec /opt/besu/bin/besu \
               --node-private-key-file=/secrets/key \
               --config-file=/etc/besu/config.toml \
-              --bootnodes
+              --bootnodes=enode://${VALIDATOR1_PUBKEY}@${BESU_VALIDATOR1_SERVICE_HOST}:30303
           livenessProbe:
             httpGet:
               path: /liveness
