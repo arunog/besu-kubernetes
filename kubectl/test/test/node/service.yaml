@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: besu
+    app.kubernetes.io/release: "1.0.0"
+  name: besu-validator1
+spec:
+  ports:
+  - name: "json-rpc"
+    port: 8545
+    targetPort: 8545
+  - name: "rlpx"
+    port: 30303
+    targetPort: 30303
+  selector:
+    app.kubernetes.io/name: besu
+    app.kubernetes.io/release: "1.0.0"
+  type: LoadBalancer
